@@ -1,0 +1,45 @@
+{
+    "name": "cursor-diff-apply-pro",
+    "displayName": "Cursor Diff Apply Pro",
+    "description": "Better diff apply for more optimized code",
+    "version": "0.0.1",
+    "publisher": "RiddleHe",
+    "engines": {
+        "vscode": "^1.74.0"
+    },
+    "categories": ["Programming Languages"],
+    "main": "./out/extension.js",
+    "activationEvents": [
+        "onLanguage:javascript",
+        "onLanguage:typescript"
+    ],
+    "contributes": {
+        "commands": [
+            {
+                "command": "diff-apply-pro.analyzeFile",
+                "title": "Analyze areas of improvement"
+            }
+        ],
+        "configuration": {
+            "properties": {
+                "diff-apply-pro.openRouterApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "OpenRouter API key"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.74.0",
+        "@types/node": "^16.x",
+        "typescript": "^4.9.4"
+    },
+    "dependencies": {
+        "axios": "^1.6.0"
+    }
+}
