@@ -2,6 +2,8 @@
 
 AI-powered code optimization extension for Cursor.
 
+![A thumbnail image showing diff between original file and optimized file](thumbnail.png)
+
 ## Setup (Dev Mode)
 
 ### Prerequisites
