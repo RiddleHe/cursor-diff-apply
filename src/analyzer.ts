@@ -29,11 +29,13 @@ export class CodeAnalyzer {
             const language = document.languageId;
 
             outputChannel.appendLine('Calling analyzeCode...');
-            const diffContent = await this.client.analyzeCode(content, language);
-            outputChannel.appendLine(`Raw response: ${diffContent}`);
-            outputChannel.appendLine(`Raw response length: ${diffContent.length}`);
-            
+            const rawResponse = await this.client.analyzeCode(content, language);
+            outputChannel.appendLine(`Raw response: ${rawResponse}`);
+            outputChannel.appendLine(`Raw response length: ${rawResponse.length}`);
 
+            const diffContent = this.extractCodeFromBackticks(rawResponse, language);
+            outputChannel.appendLine(`Extracted diff content: ${diffContent}`);
+            
             const result: DiffAnalysisResult = {
                 diffContent,
                 fileHash,
@@ -51,6 +53,22 @@ export class CodeAnalyzer {
                 timestamp: Date.now()
             };
         }
+    }
+
+    private extractCodeFromBackticks(response: string, language: string): string {
+        const marker = "// ... existing code ...";
+
+        const firstMarkerIndex = response.indexOf(marker);
+
+        if (firstMarkerIndex === -1) {
+            outputChannel.appendLine('No // ... existing code ... found.');
+            return '';
+        }
+
+        const extractedContent = response.substring(firstMarkerIndex);
+        outputChannel.appendLine(`Found marker at index ${firstMarkerIndex}. Extracted ${extractedContent.length} characters.`);
+
+        return extractedContent.trim();
     }
 
     private generateHash(content: string): string {

@@ -1,18 +1,27 @@
 import * as vscode from "vscode";
 import { CodeAnalyzer } from "./analyzer";
 import { MorphClient } from "./morph-client";
+import { DiffViewer } from "./diff-viewer";
 
 let analyzer: CodeAnalyzer;
 let morphClient: MorphClient;
+let diffViewer: DiffViewer;
+
+// session states
+let currentDocument: vscode.TextDocument | null = null;
+let currentOriginalContent: string = '';
+let currentDiffContent: string = '';
+
 export let outputChannel: vscode.OutputChannel;
 
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("Cursor Diff Apply Pro");
-    outputChannel.show();
+    // outputChannel.show();
     outputChannel.appendLine("Cursor Diff Apply Pro is now active!");
 
     analyzer = new CodeAnalyzer();
     morphClient = new MorphClient();
+    diffViewer = new DiffViewer();
     
     let analyzeCommand = vscode.commands.registerCommand("diff-apply-pro.analyzeFile", async () => {
         const editor = vscode.window.activeTextEditor;
@@ -21,54 +30,34 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const document = editor.document;
-        vscode.window.showInformationMessage("Analyzing code... Please wait.");
+        currentDocument = editor.document;
+        currentOriginalContent = currentDocument.getText();
 
         try {
-            const result = await analyzer.analyzeDocument(document);
+            // Generate diff
+            vscode.window.showInformationMessage('Analyzing code for optimization...');
+
+            const result = await analyzer.analyzeDocument(currentDocument);
 
             if (!result.diffContent || result.diffContent.trim() == '') {
                 vscode.window.showInformationMessage("No optimization opportunities found.");
                 return; // early exit if no diff
-            } else {
-                vscode.window.showInformationMessage(`Analysis complete.`);
             }
 
-            outputChannel.appendLine(result.diffContent);
+            currentDiffContent = result.diffContent;
+            outputChannel.appendLine(currentDiffContent);
 
+            // Show diff view
+            await diffViewer.showDiffBlocks(currentDocument.uri, currentDiffContent);
+
+            // Show apply option
             const choice = await vscode.window.showInformationMessage(
-                "Optimizations found. Would you like to apply them?",
-                "Apply", "Show Diff", "Cancel"
-            )
+                "Optimizations found. Review the diff and decide if you want to apply them.",
+                "Apply All", "Cancel"
+            );
 
-            if (choice == "Apply") {
-                try {
-                    vscode.window.showInformationMessage("Applying diff...");
-                    const originalCode = document.getText();
-                    const modifiedCode = await morphClient.applyDiff(originalCode, result.diffContent);
-
-                    const edit = new vscode.WorkspaceEdit();
-                    const fullRange = new vscode.Range(
-                        document.lineAt(0).range.start,
-                        document.lineAt(document.lineCount - 1).range.end
-                    )
-                    edit.replace(document.uri, fullRange, modifiedCode);
-
-                    const success = await vscode.workspace.applyEdit(edit);
-
-                    if (success) {
-                        vscode.window.showInformationMessage("Optimizations applied successfully.");
-                        outputChannel.appendLine("Optimizations applied successfully.");
-                    } else {
-                        vscode.window.showErrorMessage("Failed to apply optimizations.");
-                        outputChannel.appendLine("Failed to apply optimizations.");
-                    }
-                } catch (error) {
-                    vscode.window.showErrorMessage(`Failed to apply optimizations: ${error}`);
-                    outputChannel.appendLine(`Failed to apply optimizations: ${error}`);
-                }
-            } else if (choice == "Show Diff") {
-                outputChannel.show();
+            if (choice == "Apply All") {
+                await vscode.commands.executeCommand('diff-apply-pro.applyOptimizations');
             }
 
         } catch (error) {
@@ -77,7 +66,65 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(analyzeCommand);
+    let applyCommand = vscode.commands.registerCommand('diff-apply-pro.applyOptimizations', async () => {
+        if (!currentDocument || !currentDiffContent || !currentOriginalContent) {
+            vscode.window.showWarningMessage('No optimization to apply. Run analysis first.');
+            return;
+        }
+
+        try {
+            vscode.window.showInformationMessage('Applying optimizations...');
+            outputChannel.appendLine('Applying optimizations...');
+
+            const optimizedContent = await morphClient.applyDiff(currentOriginalContent, currentDiffContent);
+            outputChannel.appendLine(`Optimization applied successfully, length: ${optimizedContent.length}`);
+
+            const edit = new vscode.WorkspaceEdit();
+            const fullRange = new vscode.Range(
+                currentDocument.lineAt(0).range.start,
+                currentDocument.lineAt(currentDocument.lineCount - 1).range.end
+            );
+            edit.replace(currentDocument.uri, fullRange, optimizedContent);
+
+            const success = await vscode.workspace.applyEdit(edit);
+
+            if (success) {
+                await currentDocument.save();
+                outputChannel.appendLine(`File saved successfully.`);
+
+                await diffViewer.close();
+
+                currentDocument = null;
+                currentDiffContent = '';
+                currentOriginalContent = '';
+
+                vscode.window.showInformationMessage(`Optimization applied and saved!`);
+            } else {
+                vscode.window.showErrorMessage('Failed to apply optimizations.');
+                outputChannel.appendLine('Failed to apply optimizations.');
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to apply optimizations: ${error}`);
+            outputChannel.appendLine(`Failed to apply optimizations: ${error}`);
+        }
+    });
+
+    let cancelCommand = vscode.commands.registerCommand('diff-apply-pro.cancelOptimizations', async() => {
+        await diffViewer.close();
+
+        currentDocument = null;
+        currentDiffContent = '';
+        currentOriginalContent = '';
+
+        vscode.window.showInformationMessage('Optimization session cancelled.');
+        outputChannel.appendLine('Optimization session cancelled.');
+    });
+
+    context.subscriptions.push(analyzeCommand, applyCommand, cancelCommand);
 }
 
-export function deactivate() {}
+export function deactivate() {
+    if (diffViewer) {
+        diffViewer.cleanupAll();
+    }
+}

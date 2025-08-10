@@ -7,6 +7,8 @@ import { outputChannel } from "./extension";
 export class DiffViewer {
     private tempDir: string;
     private currentTempFile: string | null = null;
+    private originalUri: vscode.Uri | null = null;
+    private diffUri: vscode.Uri | null = null;
 
     constructor() {
         this.tempDir = path.join(os.tmpdir(), 'cursor-diff-apply-pro');
@@ -15,24 +17,72 @@ export class DiffViewer {
         }
     }
 
-    async showDiff(originalUri: vscode.Uri, optimizedContent: string): Promise<void> {
+    async showDiffBlocks(originalUri: vscode.Uri, rawDiffContent: string): Promise<void> {
+        this.originalUri = originalUri;
         const fileName = path.basename(originalUri.fsPath);
         const timestamp = Date.now();
-        const tempFilePath = path.join(this.tempDir, `optimized_${timestamp}_${fileName}`);
+        const tempFilePath = path.join(this.tempDir, `diff_${timestamp}_${fileName}`);
 
-        fs.writeFileSync(tempFilePath, optimizedContent, 'utf8');
+        const formattedDiff = this.formatDiffContent(rawDiffContent, fileName);
+
+        fs.writeFileSync(tempFilePath, formattedDiff, 'utf8');
         this.currentTempFile = tempFilePath;
+        this.diffUri = vscode.Uri.file(tempFilePath);
 
-        const optimizedUri = vscode.Uri.file(tempFilePath);
-
-        // open diff view
         await vscode.commands.executeCommand(
             'vscode.diff',
             originalUri,
-            optimizedUri,
+            this.diffUri,
             `${fileName} ↔ Optimized`,
-            { preview: false, viewColumn: vscode.ViewColumn.One }
+            { 
+                preview: false,
+                viewColumn: vscode.ViewColumn.One
+            }
         );
+    }
+
+    private formatDiffContent(rawDiffContent: string, fileName: string): string {
+        const header = `/*
+        * Optimization suggestion for ${fileName}
+        *
+        * Click "Apply" to apply the optimization.
+        */
+
+        `;
+
+        const cleanedDiff = rawDiffContent
+        .split('\n')
+        .map(line => line.trimEnd())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n');
+
+        return header + cleanedDiff;
+    }
+
+    getUris(): { original: vscode.Uri | null, diff: vscode.Uri | null } {
+        return {
+            original: this.originalUri,
+            diff: this.diffUri
+        };
+    }
+
+    isOpen(): boolean {
+        return this.originalUri !== null && this.diffUri !== null;
+    }
+
+    async close(): Promise<void> {
+        try {
+            await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+            if (this.originalUri) {
+                const doc = await vscode.workspace.openTextDocument(this.originalUri);
+                await vscode.window.showTextDocument(doc);
+            }
+
+            this.cleanup();
+        } catch (error) {
+            outputChannel.appendLine(`Error closing diff viewer: ${error}`);
+            this.cleanup();
+        }
     }
 
     cleanup(): void {
@@ -44,6 +94,9 @@ export class DiffViewer {
                 outputChannel.appendLine(`Failed to delete temp file: ${error}`);
             }
         }
+        this.currentTempFile = null;
+        this.originalUri = null;
+        this.diffUri = null;
     }
 
     cleanupAll(): void {

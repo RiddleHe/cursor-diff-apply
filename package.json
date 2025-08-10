@@ -18,14 +18,50 @@
             {
                 "command": "diff-apply-pro.analyzeFile",
                 "title": "Analyze areas of improvement"
+            },
+            {
+                "command": "diff-apply-pro.applyOptimizations",
+                "title": "Apply code optimizations"
+            },
+            {
+                "command": "diff-apply-pro.cancelOptimizations",
+                "title": "Cancel optimization session"
             }
         ],
+        "keybindings": [
+            {
+                "command": "diff-apply-pro.analyzeFile",
+                "key": "ctrl+shift+o",
+                "mac": "cmd+shift+o",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "diff-apply-pro.applyOptimizations",
+                "key": "ctrl+shift+a",
+                "mac": "cmd+shift+a",
+                "when": "editorTextFocus"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "command": "diff-apply-pro.analyzeFile",
+                    "group": "navigation",
+                    "when": "editorLangId == javascript || editorLangId == typescript"
+                }
+            ]
+        },
         "configuration": {
             "properties": {
                 "diff-apply-pro.openRouterApiKey": {
                     "type": "string",
                     "default": "",
                     "description": "OpenRouter API key"
+                },
+                "diff-apply-pro.morphApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Morph API key"
                 }
             }
         }
