@@ -11,6 +11,7 @@ let diffViewer: DiffViewer;
 let currentDocument: vscode.TextDocument | null = null;
 let currentOriginalContent: string = '';
 let currentDiffContent: string = '';
+let currentOptimizedContent: string = '';
 
 export let outputChannel: vscode.OutputChannel;
 
@@ -39,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             const result = await analyzer.analyzeDocument(currentDocument);
 
-            if (!result.diffContent || result.diffContent.trim() == '') {
+            if (!result.diffContent || result.diffContent.trim() === '') {
                 vscode.window.showInformationMessage("No optimization opportunities found.");
                 return; // early exit if no diff
             }
@@ -47,8 +48,19 @@ export function activate(context: vscode.ExtensionContext) {
             currentDiffContent = result.diffContent;
             outputChannel.appendLine(currentDiffContent);
 
+            // Generate optimized code given diff
+            const optimizedContent = await morphClient.applyDiff(currentOriginalContent, currentDiffContent);
+
+            if (!optimizedContent || optimizedContent.trim() === '') {
+                vscode.window.showInformationMessage('Failed to generate optimized code.');
+                return;
+            }
+            outputChannel.appendLine(`Optimized code generated, length ${optimizedContent.length}`);
+
+            currentOptimizedContent = optimizedContent;
+
             // Show diff view
-            await diffViewer.showDiffBlocks(currentDocument.uri, currentDiffContent);
+            await diffViewer.showCompleteFiles(currentDocument.uri, currentOriginalContent, currentOptimizedContent);
 
             // Show apply option
             const choice = await vscode.window.showInformationMessage(
@@ -76,15 +88,12 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('Applying optimizations...');
             outputChannel.appendLine('Applying optimizations...');
 
-            const optimizedContent = await morphClient.applyDiff(currentOriginalContent, currentDiffContent);
-            outputChannel.appendLine(`Optimization applied successfully, length: ${optimizedContent.length}`);
-
             const edit = new vscode.WorkspaceEdit();
             const fullRange = new vscode.Range(
                 currentDocument.lineAt(0).range.start,
                 currentDocument.lineAt(currentDocument.lineCount - 1).range.end
             );
-            edit.replace(currentDocument.uri, fullRange, optimizedContent);
+            edit.replace(currentDocument.uri, fullRange, currentOptimizedContent);
 
             const success = await vscode.workspace.applyEdit(edit);
 
@@ -97,6 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
                 currentDocument = null;
                 currentDiffContent = '';
                 currentOriginalContent = '';
+                currentOptimizedContent = '';
 
                 vscode.window.showInformationMessage(`Optimization applied and saved!`);
             } else {
@@ -115,6 +125,7 @@ export function activate(context: vscode.ExtensionContext) {
         currentDocument = null;
         currentDiffContent = '';
         currentOriginalContent = '';
+        currentOptimizedContent = '';
 
         vscode.window.showInformationMessage('Optimization session cancelled.');
         outputChannel.appendLine('Optimization session cancelled.');

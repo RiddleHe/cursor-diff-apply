@@ -17,15 +17,14 @@ export class DiffViewer {
         }
     }
 
-    async showDiffBlocks(originalUri: vscode.Uri, rawDiffContent: string): Promise<void> {
+    async showCompleteFiles(originalUri: vscode.Uri, originalContent: string, optimizedContent: string): Promise<void> {
         this.originalUri = originalUri;
         const fileName = path.basename(originalUri.fsPath);
         const timestamp = Date.now();
         const tempFilePath = path.join(this.tempDir, `diff_${timestamp}_${fileName}`);
 
-        const formattedDiff = this.formatDiffContent(rawDiffContent, fileName);
-
-        fs.writeFileSync(tempFilePath, formattedDiff, 'utf8');
+        // write complete optimized content to temp file
+        fs.writeFileSync(tempFilePath, optimizedContent, 'utf8');
         this.currentTempFile = tempFilePath;
         this.diffUri = vscode.Uri.file(tempFilePath);
 
@@ -39,24 +38,6 @@ export class DiffViewer {
                 viewColumn: vscode.ViewColumn.One
             }
         );
-    }
-
-    private formatDiffContent(rawDiffContent: string, fileName: string): string {
-        const header = `/*
-        * Optimization suggestion for ${fileName}
-        *
-        * Click "Apply" to apply the optimization.
-        */
-
-        `;
-
-        const cleanedDiff = rawDiffContent
-        .split('\n')
-        .map(line => line.trimEnd())
-        .join('\n')
-        .replace(/\n{3,}/g, '\n\n');
-
-        return header + cleanedDiff;
     }
 
     getUris(): { original: vscode.Uri | null, diff: vscode.Uri | null } {
